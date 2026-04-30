@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RunPath v5 | Live Tracker</title>
+    <link rel="manifest" href="manifest.json">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Heebo:wght@300;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        :root { --bg:#080810; --surface:#10101c; --accent:#d4f53c; --accent2:#3bffa0; --text:#f0f0f8; --border:#252540; }
+        body { background: var(--bg); color: var(--text); font-family: 'Heebo', sans-serif; margin: 0; padding: 0; }
+        .container { padding: 20px; text-align: center; }
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 20px; margin-bottom: 20px; }
+        #map { height: 350px; width: 100%; border-radius: 15px; margin: 15px 0; border: 1px solid var(--border); }
+        .live-tracker-overlay { display: none; position: fixed; inset: 0; background: var(--bg); z-index: 1000; flex-direction: column; padding: 20px; }
+        .live-tracker-overlay.active { display: flex; }
+        .stat-big { font-family: 'Bebas Neue'; font-size: 60px; color: var(--accent); line-height: 1; }
+        .btn { background: var(--accent); color: #000; border: none; padding: 15px 30px; border-radius: 50px; font-weight: bold; cursor: pointer; width: 100%; }
+        .btn-stop { background: #ff6b6b; color: #white; border-radius: 50%; width: 70px; height: 70px; margin: 10px auto; }
+    </style>
+</head>
+<body>
+
+<div class="container" id="mainPage">
+    <h1 style="font-family: 'Bebas Neue'; font-size: 3.5rem; color: var(--accent);">RUNPATH</h1>
+    <div class="card">
+        <h3>הגדרות אימון</h3>
+        <input type="number" id="userWeight" placeholder="משקל (קג)" style="width:80%; padding:10px; margin-bottom:10px; border-radius:10px;">
+        <button class="btn" onclick="startLiveRunning()">התחל ריצה חיה</button>
+    </div>
+    <div class="card">
+        <button class="btn" style="background:var(--accent2)" onclick="requestNotificationPermission()">הפעל תזכורות אימון</button>
+    </div>
+</div>
+
+<div id="liveTracker" class="live-tracker-overlay">
+    <div class="stat-big" id="liveTimer">00:00</div>
+    <div id="map"></div>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+        <div class="card"><div class="stat-big" style="font-size:30px;" id="liveDist">0.00</div><div>ק"מ</div></div>
+        <div class="card"><div class="stat-big" style="font-size:30px; color:var(--accent2);" id="liveCal">0</div><div>קלוריות</div></div>
+    </div>
+    <button class="btn-stop" onclick="stopRunning()">סוף</button>
+</div>
+
+<script>
+let map, userMarker, pathLine, watchId, timerInterval, startTime;
+let totalDistance = 0, lastCoord = null, pathCoords = [];
+
+function startLiveRunning() {
+    document.getElementById('liveTracker').classList.add('active');
+    startTime = Date.now();
+    timerInterval = setInterval(() => {
+        const diff = Math.floor((Date.now() - startTime) / 1000);
+        document.getElementById('liveTimer').textContent = `${String(Math.floor(diff/60)).padStart(2,'0')}:${String(diff%60).padStart(2,'0')}`;
+    }, 1000);
+
+    watchId = navigator.geolocation.watchPosition(pos => {
+        const { latitude, longitude } = pos.coords;
+        if (!map) {
+            map = L.map('map').setView([latitude, longitude], 16);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+            userMarker = L.marker([latitude, longitude]).addTo(map);
+            pathLine = L.polyline([], {color: '#3bffa0', weight: 5}).addTo(map);
+        }
+        const newPos = [latitude, longitude];
+        userMarker.setLatLng(newPos);
+        pathCoords.push(newPos);
+        pathLine.setLatLngs(pathCoords);
+        map.panTo(newPos);
+
+        if (lastCoord) {
+            const R = 6371;
+            const dLat = (latitude-lastCoord.lat)*Math.PI/180;
+            const dLon = (longitude-lastCoord.lon)*Math.PI/180;
+            const a = Math.sin(dLat/2)**2 + Math.cos(lastCoord.lat*Math.PI/180)*Math.cos(latitude*Math.PI/180)*Math.sin(dLon/2)**2;
+            totalDistance += R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+        lastCoord = { lat: latitude, lon: longitude };
+        document.getElementById('liveDist').textContent = totalDistance.toFixed(2);
+        
+        const weight = document.getElementById('userWeight').value || 70;
+        document.getElementById('liveCal').textContent = Math.round(totalDistance * weight * 1.036);
+    }, null, { enableHighAccuracy: true });
+}
+
+function requestNotificationPermission() {
+    Notification.requestPermission().then(p => { if(p === 'granted') alert('תזכורות הופעלו!'); });
+}
+
+function stopRunning() {
+    navigator.geolocation.clearWatch(watchId);
+    clearInterval(timerInterval);
+    location.reload();
+}
+
+if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js'); }
+</script>
+</body>
+</html>

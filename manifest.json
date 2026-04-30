@@ -1,0 +1,15 @@
+{
+  "short_name": "RunPath",
+  "name": "RunPath Live Tracker",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/5231/5231662.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "./index.html",
+  "background_color": "#080810",
+  "display": "standalone",
+  "theme_color": "#d4f53c"
+}
